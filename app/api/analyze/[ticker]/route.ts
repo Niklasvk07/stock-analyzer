@@ -6,8 +6,8 @@ import type { ScreenedStock } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: Request, { params }: { params: { ticker: string } }) {
-  const { ticker } = params;
+export async function GET(_req: Request, { params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker } = await params;
 
   if (!process.env.GROQ_API_KEY) {
     return NextResponse.json({ error: 'GROQ_API_KEY nicht konfiguriert' }, { status: 503 });

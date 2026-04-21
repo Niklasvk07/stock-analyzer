@@ -5,8 +5,8 @@ import type { StockDetail } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET(_req: Request, { params }: { params: { ticker: string } }) {
-  const { ticker } = params;
+export async function GET(_req: Request, { params }: { params: Promise<{ ticker: string }> }) {
+  const { ticker } = await params;
 
   const [quote, history, summary, news, analystRating] = await Promise.all([
     singleQuote(ticker),
