@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import type { ScreenedStock } from '@/lib/types';
 import { clsx } from 'clsx';
@@ -50,8 +49,8 @@ export function StockTable({ stocks }: { stocks: ScreenedStock[] }) {
         </thead>
         <tbody>
           {stocks.map((s, i) => (
-            <Link key={s.ticker} href={`/stock/${s.ticker}`} legacyBehavior>
-              <tr className="border-b border-[#30363d] hover:bg-[#1c2128] cursor-pointer transition-colors">
+            <tr key={s.ticker} onClick={() => window.location.href = `/stock/${s.ticker}`}
+              className="border-b border-[#30363d] hover:bg-[#1c2128] cursor-pointer transition-colors">
                 <td className="px-4 py-3 text-[#7d8590]">{i + 1}</td>
                 <td className="px-4 py-3">
                   <div className="font-bold text-[#e6edf3]">{s.ticker}</div>
@@ -75,7 +74,6 @@ export function StockTable({ stocks }: { stocks: ScreenedStock[] }) {
                 <td className="px-4 py-3 text-[#7d8590] text-xs">{s.sector}</td>
                 <td className="px-4 py-3 text-[#7d8590] text-xs max-w-[160px] truncate">{s.catalystType}</td>
               </tr>
-            </Link>
           ))}
         </tbody>
       </table>
