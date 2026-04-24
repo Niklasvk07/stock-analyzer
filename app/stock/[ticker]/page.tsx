@@ -98,7 +98,7 @@ export default function StockPage() {
                   </div>
                   <p className="text-[#7d8590] text-sm mt-0.5">{stock.name}</p>
                   <div className="flex flex-wrap gap-2 mt-2">
-                    {[stock.sector, stock.industry, stock.country].filter(Boolean).map((tag) => (
+                    {Array.from(new Set([stock.sector, stock.industry, stock.country].filter(Boolean))).map((tag) => (
                       <span key={tag} className="text-[10px] border border-[#30363d] bg-[#0d1117] px-2 py-0.5 rounded text-[#7d8590]">
                         {tag}
                       </span>
