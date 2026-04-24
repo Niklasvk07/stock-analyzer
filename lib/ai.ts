@@ -15,41 +15,41 @@ export async function generateStockAnalysis(
 
   const completion = await groq.chat.completions.create({
     model: 'llama-3.3-70b-versatile',
-    max_tokens: 900,
+    max_tokens: 1000,
     messages: [{
       role: 'user',
-      content: `Du bist ein erfahrener Aktienanalyst und Kurzfrist-Trader. Analysiere diese Aktie detailliert auf Deutsch für einen Zeithorizont von 1–14 Tagen.
+      content: `Du bist ein unabhängiger, kritischer Finanzanalyst. Deine Aufgabe ist eine EHRLICHE, DATENBASIERTE Analyse — KEINE Werbung, KEINE Schönfärberei. Wenn die Daten negativ sind, sage es klar. Du verdienst kein Geld daran, ob jemand kauft oder nicht.
 
 **AKTIE:** ${stock.name} (${stock.ticker})
 **Sektor:** ${stock.sector} / ${stock.industry}
-**Aktueller Kurs:** $${stock.price.toFixed(2)}
-**Performance:** ${stock.change1d >= 0 ? '+' : ''}${stock.change1d.toFixed(1)}% heute | ${stock.change5d >= 0 ? '+' : ''}${stock.change5d.toFixed(1)}% (5 Tage) | ${stock.change20d >= 0 ? '+' : ''}${stock.change20d.toFixed(1)}% (20 Tage)
+**Kurs:** $${stock.price.toFixed(2)}
+**Performance:** ${stock.change1d >= 0 ? '+' : ''}${stock.change1d.toFixed(1)}% (heute) | ${stock.change5d >= 0 ? '+' : ''}${stock.change5d.toFixed(1)}% (5T) | ${stock.change20d >= 0 ? '+' : ''}${stock.change20d.toFixed(1)}% (20T)
 **Volumen:** ${stock.volumeRatio.toFixed(1)}x über Durchschnitt
 **Marktkapitalisierung:** $${(stock.marketCap / 1e9).toFixed(2)}B
-**Katalysator:** ${stock.catalystType}
-**Score:** ${stock.score.total}/100 (Signal: ${stock.signal})
+**Score:** ${stock.score.total}/100 | Signal: ${stock.signal}
 
-**AKTUELLE NEWS & EREIGNISSE:**
+**NEWS:**
 ${newsText}
 
-Erstelle eine strukturierte Analyse mit diesen 5 Abschnitten:
+Erstelle eine strukturierte Analyse auf Deutsch:
 
-**1. Warum jetzt?**
-Was treibt die aktuelle Bewegung? Welcher Katalysator (Earnings, Auftrag, politische Entscheidung, Sektor-Rotation) ist aktiv?
+**1. Was treibt die Bewegung?**
+Ehrliche Einschätzung: Echter Katalysator (Earnings, Vertrag, Produkt) oder nur Spekulation/Hype? Wie nachhaltig ist das?
 
-**2. Makro & Politik**
-Welche politischen Entwicklungen, Regulierungen, Zinsentscheidungen oder geopolitische Faktoren beeinflussen diese Aktie und den Sektor gerade? (z.B. Chips Act, Zölle, Fed-Entscheidungen, Subventionen)
+**2. Makroumfeld**
+Welche externen Faktoren (Zinsen, Zölle, Regulierung, Geopolitik) beeinflussen diese Aktie positiv oder negativ?
 
-**3. Kurspotenzial (1–14 Tage)**
-Konkreter Ausblick: Wo könnte der Kurs in 1 Woche und in 2 Wochen stehen? Nenne realistische Kursziele (z.B. "+8–12% realistisch, Widerstand bei $X"). Was sind die wichtigsten Trigger für weitere Kursgewinne?
+**3. Kursprognose 1–14 Tage (3 Szenarien)**
+- **Bullish (~X% Wahrscheinlichkeit):** Kurs könnte auf $X steigen, wenn...
+- **Neutral (~X% Wahrscheinlichkeit):** Seitwärts bei $X–$X, weil...
+- **Bearish (~X% Wahrscheinlichkeit):** Kurs könnte auf $X fallen, wenn...
+Wahrscheinlichkeiten müssen zusammen 100% ergeben. Sei realistisch.
 
-**4. Risiken**
-Was könnte schiefgehen? Konkrete Risiken: schlechte Earnings, Sektor-Rotation, politische Gegenwind, technische Widerstände.
+**4. Kritische Risiken**
+Was könnte GEGEN einen Kauf sprechen? Überbewertung? Schwache Fundamentaldaten? Technischer Widerstand? Sei hier besonders kritisch.
 
-**5. Aehr-Ähnlichkeit**
-Wie ähnelt dieses Muster dem Aehr Test Systems Lauf (kleines/mittleres Unternehmen, Nischensektor im Aufwind, Katalysator-Event, starkes Volumen)? Bewertung von 1–10.
-
-Sei konkret und direkt. Kein langer Disclaimer.`,
+**5. Fazit & klare Empfehlung**
+**KAUFEN / HALTEN / NICHT KAUFEN** — mit 2–3 Sätzen Begründung. Wenn du nicht kaufen würdest, sage es direkt.`,
     }],
   });
 
@@ -61,12 +61,12 @@ export async function generateBriefSummary(stock: ScreenedStock): Promise<string
 
   const completion = await groq.chat.completions.create({
     model: 'llama-3.1-8b-instant',
-    max_tokens: 120,
+    max_tokens: 100,
     messages: [{
       role: 'user',
-      content: `2 Sätze auf Deutsch: Warum ist ${stock.name} (${stock.ticker}) jetzt kurzfristig interessant?
-Daten: ${stock.change1d.toFixed(1)}% heute, ${stock.volumeRatio.toFixed(1)}x Volumen, Sektor: ${stock.sector}, Signal: ${stock.catalystType}.
-Nur Kernaussage, kein Disclaimer.`,
+      content: `Neutrale 1-Satz-Einschätzung auf Deutsch für ${stock.name} (${stock.ticker}).
+Daten: ${stock.change1d.toFixed(1)}% heute, ${stock.volumeRatio.toFixed(1)}x Volumen, ${stock.sector}, Score ${stock.score.total}/100.
+Kein Hype, keine Empfehlung — nur sachliche Beobachtung. Maximal 20 Wörter.`,
     }],
   });
 

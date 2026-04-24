@@ -92,9 +92,9 @@ export async function runScreener(): Promise<ScreenedStock[]> {
     return true;
   });
 
-  // Build initial stock list
+  // Build initial stock list — only LS Exchange compatible (marketCap > 50M, price > $1)
   const stocks: ScreenedStock[] = allQuotes
-    .filter((q) => (q.regularMarketPrice ?? 0) > 0.5)
+    .filter((q) => (q.regularMarketPrice ?? 0) > 1 && (q.marketCap ?? 0) > 50e6)
     .map((q) => {
       const vol = q.regularMarketVolume ?? 0;
       const avgVol = q.averageDailyVolume3Month ?? q.averageDailyVolume10Day ?? vol;
