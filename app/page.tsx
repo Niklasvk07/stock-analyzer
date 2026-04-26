@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import type { ScreenerResult, ScreenedStock } from '@/lib/types';
 import { clsx } from 'clsx';
+import { ApiUsage, trackUsage } from '@/components/ApiUsage';
 
 const SIGNALS = ['Alle', 'STRONG_BUY', 'BUY', 'WATCH', 'NEUTRAL'] as const;
 const SIGNAL_LABELS: Record<string, string> = {
@@ -74,7 +75,10 @@ export default function Dashboard() {
     try {
       const res = await fetch('/api/screen');
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setResult(await res.json());
+      const data = await res.json();
+      setResult(data);
+      trackUsage('screenerLoads');
+      if (data.stocks?.length) trackUsage('summaries', Math.min(8, data.stocks.length));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Fehler beim Laden');
     } finally {
@@ -321,6 +325,7 @@ export default function Dashboard() {
           Keine Anlageberatung. Kurse können verzögert sein. Daten: Yahoo Finance · KI: Groq/Llama
         </p>
       </main>
+      <ApiUsage />
     </div>
   );
 }

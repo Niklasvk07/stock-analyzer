@@ -4,7 +4,6 @@ import Link from 'next/link';
 import { TrendingUp, TrendingDown, Star, Zap } from 'lucide-react';
 import type { ScreenedStock } from '@/lib/types';
 import { clsx } from 'clsx';
-import { GaugeMeter } from './GaugeMeter';
 
 const SIGNAL_STYLES: Record<string, { badge: string; bar: string }> = {
   STRONG_BUY: { badge: 'bg-[#3fb950]/15 text-[#3fb950] border-[#3fb950]/40', bar: 'border-l-[#3fb950]' },
@@ -24,6 +23,19 @@ function fmt(n: number): string {
   return `$${n.toLocaleString()}`;
 }
 
+function ScoreBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
+  const pct = Math.min(100, Math.round((value / max) * 100));
+  return (
+    <div className="flex items-center gap-2 text-[10px]">
+      <span className="w-16 shrink-0 text-[#484f58]">{label}</span>
+      <div className="flex-1 h-1.5 bg-[#21262d] rounded-full overflow-hidden">
+        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+      <span className="w-5 text-right text-[#7d8590]">{value}</span>
+    </div>
+  );
+}
+
 export function StockCard({ stock, rank, isWatched = false, onToggleWatch }: {
   stock: ScreenedStock;
   rank: number;
@@ -36,13 +48,11 @@ export function StockCard({ stock, rank, isWatched = false, onToggleWatch }: {
   return (
     <div className={clsx(
       'group relative bg-[#161b22] border border-[#30363d] border-l-[3px] rounded-xl overflow-hidden',
-      'hover:bg-[#1c2128] hover:shadow-lg hover:shadow-black/30 transition-all duration-200',
+      'hover:bg-[#1c2128] hover:shadow-lg hover:shadow-black/20 transition-all duration-200',
       styles.bar,
     )}>
-      {/* Rank */}
       <div className="absolute top-3 left-4 text-[10px] font-bold text-[#484f58]">#{rank}</div>
 
-      {/* Watchlist star */}
       {onToggleWatch && (
         <button
           onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleWatch(stock.ticker); }}
@@ -55,7 +65,7 @@ export function StockCard({ stock, rank, isWatched = false, onToggleWatch }: {
       <Link href={`/stock/${stock.ticker}`} className="block p-4">
         {/* Header */}
         <div className="flex items-start justify-between mt-3 mb-3">
-          <div className="min-w-0 flex-1 pr-2">
+          <div className="min-w-0 flex-1 pr-8">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-bold text-[17px] text-[#e6edf3] leading-none">{stock.ticker}</span>
               <span className={clsx('text-[9px] font-bold px-1.5 py-0.5 rounded border', styles.badge)}>
@@ -73,35 +83,39 @@ export function StockCard({ stock, rank, isWatched = false, onToggleWatch }: {
           </div>
         </div>
 
-        {/* Gauge + Metrics */}
-        <div className="flex items-center gap-4 py-2">
-          <GaugeMeter score={stock.score.total} />
-          <div className="flex-1 space-y-2.5">
-            <div className="flex justify-between text-[11px]">
-              <span className="text-[#484f58]">5 Tage</span>
-              <span className={clsx('font-medium', stock.change5d >= 0 ? 'text-[#3fb950]' : 'text-[#f85149]')}>
-                {stock.change5d >= 0 ? '+' : ''}{stock.change5d.toFixed(1)}%
-              </span>
+        {/* Score total + 5d */}
+        <div className="flex items-center justify-between mb-3 text-xs">
+          <div className="flex items-center gap-1.5">
+            <div className="w-8 h-8 rounded-lg bg-[#0d1117] border border-[#30363d] flex items-center justify-center font-bold text-sm text-[#e6edf3]">
+              {stock.score.total}
             </div>
-            <div className="flex justify-between text-[11px]">
-              <span className="text-[#484f58]">Volumen</span>
-              <span className="text-[#58a6ff] font-medium">{stock.volumeRatio.toFixed(1)}x Ø</span>
+            <div>
+              <div className="text-[10px] text-[#484f58]">Score /100</div>
+              <div className="text-[10px] text-[#58a6ff]">{stock.volumeRatio.toFixed(1)}x Vol</div>
             </div>
-            <div className="flex justify-between text-[11px]">
-              <span className="text-[#484f58]">Marktk.</span>
-              <span className="text-[#7d8590]">{fmt(stock.marketCap)}</span>
+          </div>
+          <div className="text-right">
+            <div className={clsx('text-sm font-semibold', stock.change5d >= 0 ? 'text-[#3fb950]' : 'text-[#f85149]')}>
+              {stock.change5d >= 0 ? '+' : ''}{stock.change5d.toFixed(1)}%
             </div>
+            <div className="text-[10px] text-[#484f58]">5 Tage</div>
           </div>
         </div>
 
-        {/* Catalyst + Sektor */}
-        <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-[#21262d]">
-          <Zap className="w-3 h-3 text-[#d29922] shrink-0" />
-          <span className="text-[10px] text-[#7d8590] truncate flex-1">{stock.catalystType}</span>
-          <span className="text-[10px] text-[#484f58] shrink-0 ml-1">{stock.sector}</span>
+        {/* Score bars */}
+        <div className="space-y-1.5 mb-3">
+          <ScoreBar label="Momentum" value={stock.score.momentum} max={30} color="bg-[#3fb950]" />
+          <ScoreBar label="Volumen" value={stock.score.volume} max={25} color="bg-[#58a6ff]" />
+          <ScoreBar label="Sektorstärke" value={stock.score.sector} max={20} color="bg-[#bc8cff]" />
         </div>
 
-        {/* AI Summary */}
+        {/* Footer */}
+        <div className="flex items-center gap-1.5 pt-2 border-t border-[#21262d]">
+          <Zap className="w-3 h-3 text-[#d29922] shrink-0" />
+          <span className="text-[10px] text-[#7d8590] truncate flex-1">{stock.catalystType}</span>
+          <span className="text-[10px] text-[#484f58] shrink-0">{fmt(stock.marketCap)}</span>
+        </div>
+
         {stock.briefSummary && (
           <p className="mt-2 text-[11px] text-[#8b949e] leading-relaxed line-clamp-2">{stock.briefSummary}</p>
         )}

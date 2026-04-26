@@ -182,7 +182,7 @@ export async function runScreener(): Promise<ScreenedStock[]> {
   }
 
   return stocks
-    .filter((s) => s.score.total >= 18)
+    .filter((s) => s.score.total >= 20)
     .sort((a, b) => b.score.total - a.score.total)
-    .slice(0, 24);
+    .slice(0, 16);
 }

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Sparkles, Loader2, ChevronDown } from 'lucide-react';
+import { trackUsage } from './ApiUsage';
 
 interface Props {
   ticker: string;
@@ -17,6 +18,7 @@ export function AIAnalysis({ ticker, preloaded }: Props) {
     if (analysis) { setExpanded(!expanded); return; }
     setLoading(true);
     setExpanded(true);
+    trackUsage('analyses');
     try {
       const res = await fetch(`/api/analyze/${ticker}`);
       const data = await res.json();
