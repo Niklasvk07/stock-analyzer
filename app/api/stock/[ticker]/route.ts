@@ -46,7 +46,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ ticker:
     pe: quote.trailingPE,
     weekHigh52: quote.fiftyTwoWeekHigh,
     weekLow52: quote.fiftyTwoWeekLow,
-    score: { momentum: 0, volume: 0, sector: 0, fundamental: 0, news: 0, total: 0 },
+    score: { momentum: 0, volume: 0, sector: 0, fundamental: 0, probability: 0, total: 0 },
     signal: 'NEUTRAL',
     catalystType: 'Manuelle Suche',
     history,

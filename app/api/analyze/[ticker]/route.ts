@@ -38,7 +38,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ ticker:
     marketCap: quote.marketCap ?? 0,
     sector: quote.sector ?? 'Unknown',
     industry: quote.industry ?? 'Unknown',
-    score: { momentum: 0, volume: 0, sector: 0, fundamental: 0, news: 0, total: 0 },
+    score: { momentum: 0, volume: 0, sector: 0, fundamental: 0, probability: 0, total: 0 },
     signal: 'NEUTRAL',
     catalystType: 'Analyse angefragt',
   };
