@@ -110,6 +110,17 @@ export function ApiUsage() {
             </div>
           </div>
 
+          {/* Finnhub */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between text-[10px]">
+              <span className="text-[#7d8590]">Finnhub (Fallback)</span>
+              <span className="text-[#3fb950]">Aktiv</span>
+            </div>
+            <div className="text-[9px] text-[#484f58]">
+              Fallback für Kurse &amp; News · Free Tier: 60 Anfragen/min
+            </div>
+          </div>
+
           <div className="pt-1 border-t border-[#30363d] text-[9px] text-[#484f58]">
             Zähler wird täglich um Mitternacht zurückgesetzt
           </div>
