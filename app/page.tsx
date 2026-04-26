@@ -2,330 +2,415 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Header } from '@/components/Header';
-import { StockCard } from '@/components/StockCard';
-import { StockTable } from '@/components/StockTable';
+import { FeaturedCard, StockCard } from '@/components/StockCard';
+import { DetailDrawer } from '@/components/DetailDrawer';
+import { getUsage, trackUsage } from '@/components/ApiUsage';
 import {
-  AlertCircle, BarChart2, Filter, Search,
-  LayoutGrid, List, TrendingUp, Zap, RefreshCw, Star, Bookmark,
+  Search, RefreshCw, TrendingUp, Zap, Star,
+  BarChart2, Scan, Bookmark, Activity,
 } from 'lucide-react';
 import type { ScreenerResult, ScreenedStock } from '@/lib/types';
-import { clsx } from 'clsx';
-import { ApiUsage, trackUsage } from '@/components/ApiUsage';
 
-const SIGNALS = ['Alle', 'STRONG_BUY', 'BUY', 'WATCH', 'NEUTRAL'] as const;
-const SIGNAL_LABELS: Record<string, string> = {
-  Alle: 'Alle', STRONG_BUY: 'Strong Buy', BUY: 'Buy', WATCH: 'Watch', NEUTRAL: 'Neutral',
-};
-
+// ── Watchlist hook ────────────────────────────────────────────────────────
 function useWatchlist() {
   const [watchlist, setWatchlist] = useState<Set<string>>(new Set());
-
   useEffect(() => {
     try {
-      const saved = localStorage.getItem('watchlist');
-      if (saved) setWatchlist(new Set(JSON.parse(saved)));
-    } catch { /* ignore */ }
+      const s = localStorage.getItem('watchlist');
+      if (s) setWatchlist(new Set(JSON.parse(s)));
+    } catch { /* */ }
   }, []);
-
-  const toggle = useCallback((ticker: string) => {
+  const toggle = useCallback((t: string) => {
     setWatchlist((prev) => {
       const next = new Set(prev);
-      if (next.has(ticker)) next.delete(ticker); else next.add(ticker);
-      try { localStorage.setItem('watchlist', JSON.stringify([...next])); } catch { /* ignore */ }
+      if (next.has(t)) next.delete(t); else next.add(t);
+      try { localStorage.setItem('watchlist', JSON.stringify([...next])); } catch { /* */ }
       return next;
     });
   }, []);
-
   return { watchlist, toggle };
 }
 
-function StatCard({ label, value, sub, color, icon }: {
-  label: string; value: string | number; sub?: string; color: string; icon: React.ReactNode;
-}) {
-  return (
-    <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-4 flex items-start gap-3">
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${color}`}>
-        {icon}
+// ── Sidebar API usage ─────────────────────────────────────────────────────
+function SidebarApiUsage() {
+  const [usage, setUsage] = useState(getUsage());
+  useEffect(() => {
+    const iv = setInterval(() => setUsage(getUsage()), 8000);
+    return () => clearInterval(iv);
+  }, []);
+
+  function bar(used: number, limit: number, color: string) {
+    const pct = Math.min(100, (used / limit) * 100);
+    return (
+      <div className="h-1 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct > 70 ? '#f59e0b' : color }} />
       </div>
-      <div>
-        <div className="text-xl font-bold text-[#e6edf3]">{value}</div>
-        <div className="text-xs text-[#7d8590]">{label}</div>
-        {sub && <div className="text-[10px] text-[#484f58] mt-0.5">{sub}</div>}
+    );
+  }
+
+  return (
+    <div className="mt-auto pt-4" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+      <div className="text-[9px] uppercase tracking-[0.08em] mb-3 flex items-center gap-1.5" style={{ color: 'var(--text-dimmer)' }}>
+        <Activity className="w-3 h-3" /> API-Nutzung heute
+      </div>
+      <div className="space-y-2.5">
+        <div>
+          <div className="flex justify-between text-[10px] mb-1">
+            <span style={{ color: 'var(--text-dim)' }}>Groq Analysen</span>
+            <span className="font-mono" style={{ color: '#4ade80' }}>{usage.analyses}/1 000</span>
+          </div>
+          {bar(usage.analyses, 1000, '#4ade80')}
+        </div>
+        <div>
+          <div className="flex justify-between text-[10px] mb-1">
+            <span style={{ color: 'var(--text-dim)' }}>Zusammenfassungen</span>
+            <span className="font-mono" style={{ color: '#38bdf8' }}>{usage.summaries}/14 400</span>
+          </div>
+          {bar(usage.summaries, 14400, '#38bdf8')}
+        </div>
+        <div className="text-[10px] pt-1" style={{ color: 'var(--text-dimmer)' }}>
+          Yahoo Finance · Finnhub: Aktiv
+        </div>
       </div>
     </div>
   );
 }
 
+// ── Main ──────────────────────────────────────────────────────────────────
+const ALL_SECTORS = 'Alle Sektoren';
+const SIGNALS = ['Alle', 'STRONG_BUY', 'BUY', 'WATCH'] as const;
+const SIGNAL_DOT: Record<string, string> = {
+  Alle: 'rgba(255,255,255,0.30)', STRONG_BUY: '#f59e0b', BUY: '#38bdf8', WATCH: 'rgba(255,255,255,0.30)',
+};
+
 export default function Dashboard() {
   const router = useRouter();
   const { watchlist, toggle: toggleWatch } = useWatchlist();
+
   const [result, setResult] = useState<ScreenerResult | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [signal, setSignal] = useState('Alle');
-  const [sectorFilter, setSectorFilter] = useState('Alle');
-  const [view, setView] = useState<'grid' | 'table'>('grid');
+  const [signal, setSignal] = useState<string>('Alle');
+  const [sector, setSector] = useState(ALL_SECTORS);
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<'screener' | 'watchlist'>('screener');
+  const [selected, setSelected] = useState<ScreenedStock | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
     try {
       const res = await fetch('/api/screen');
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setResult(data);
       trackUsage('screenerLoads');
       if (data.stocks?.length) trackUsage('summaries', Math.min(8, data.stocks.length));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Fehler beim Laden');
-    } finally {
+    } catch { /* */ } finally {
       setLoading(false);
     }
   }, []);
 
   useEffect(() => { load(); }, [load]);
 
-  function goToSearch() {
+  function goSearch() {
     const t = search.trim().toUpperCase();
     if (t) router.push(`/stock/${t}`);
   }
 
   const stocks = result?.stocks ?? [];
-  const sectors = ['Alle', ...Array.from(new Set(stocks.map((s) => s.sector))).filter(Boolean).sort()];
-  const sectorCounts: Record<string, number> = { Alle: stocks.length };
-  for (const s of stocks) sectorCounts[s.sector] = (sectorCounts[s.sector] ?? 0) + 1;
+  const sectors = [ALL_SECTORS, ...Array.from(new Set(stocks.map((s) => s.sector))).filter(Boolean).sort()];
 
   const baseStocks = tab === 'watchlist' ? stocks.filter((s) => watchlist.has(s.ticker)) : stocks;
-
-  const filtered: ScreenedStock[] = baseStocks.filter((s) => {
+  const filtered = baseStocks.filter((s) => {
     if (signal !== 'Alle' && s.signal !== signal) return false;
-    if (sectorFilter !== 'Alle' && s.sector !== sectorFilter) return false;
-    if (search && !s.ticker.includes(search.toUpperCase()) && !s.name.toLowerCase().includes(search.toLowerCase())) return false;
+    if (sector !== ALL_SECTORS && s.sector !== sector) return false;
     return true;
   });
 
-  const strongBuy = stocks.filter((s) => s.signal === 'STRONG_BUY').length;
-  const buy = stocks.filter((s) => s.signal === 'BUY').length;
-  const avgScore = stocks.length ? Math.round(stocks.reduce((a, b) => a + b.score.total, 0) / stocks.length) : 0;
-  const topMover = stocks[0];
+  const strongBuys = filtered.filter((s) => s.signal === 'STRONG_BUY');
+  const others = filtered.filter((s) => s.signal !== 'STRONG_BUY');
+  const sectorCounts: Record<string, number> = { [ALL_SECTORS]: stocks.length };
+  for (const s of stocks) sectorCounts[s.sector] = (sectorCounts[s.sector] ?? 0) + 1;
+
+  // ── Sidebar ──────────────────────────────────────────────────────────────
+  const sidebar = (
+    <aside
+      className="hidden md:flex flex-col gap-0 px-4 py-5 shrink-0 overflow-y-auto"
+      style={{
+        width: 220,
+        position: 'sticky',
+        top: 56,
+        height: 'calc(100vh - 56px)',
+        borderRight: '1px solid rgba(255,255,255,0.06)',
+      }}
+    >
+      {/* Signal filter */}
+      <div className="mb-5">
+        <div className="text-[9px] uppercase tracking-[0.08em] mb-2" style={{ color: 'var(--text-dimmer)' }}>Signal</div>
+        <div className="space-y-0.5">
+          {SIGNALS.map((s) => (
+            <button key={s} onClick={() => setSignal(s)}
+              className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors"
+              style={{ background: signal === s ? 'rgba(255,255,255,0.06)' : 'transparent', color: signal === s ? '#fff' : 'var(--text-dim)' }}>
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SIGNAL_DOT[s] }} />
+              {s === 'Alle' ? 'Alle Signale' : s.replace('_', ' ')}
+              <span className="ml-auto font-mono text-[10px]" style={{ color: 'var(--text-dimmer)' }}>
+                {s === 'Alle' ? stocks.length : stocks.filter((x) => x.signal === s).length}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Sector filter */}
+      <div className="mb-5">
+        <div className="text-[9px] uppercase tracking-[0.08em] mb-2" style={{ color: 'var(--text-dimmer)' }}>Sektor</div>
+        <div className="space-y-0.5">
+          {sectors.map((s) => (
+            <button key={s} onClick={() => setSector(s)}
+              className="w-full flex items-center px-2.5 py-1.5 rounded-lg text-xs text-left transition-colors truncate"
+              style={{ background: sector === s ? 'rgba(255,255,255,0.06)' : 'transparent', color: sector === s ? '#fff' : 'var(--text-dim)' }}>
+              <span className="truncate">{s}</span>
+              <span className="ml-auto font-mono text-[10px] shrink-0 pl-1" style={{ color: 'var(--text-dimmer)' }}>
+                {sectorCounts[s] ?? 0}
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <SidebarApiUsage />
+    </aside>
+  );
+
+  // ── Navbar ───────────────────────────────────────────────────────────────
+  const navbar = (
+    <header
+      className="sticky top-0 z-30 flex items-center justify-between px-5"
+      style={{
+        height: 56,
+        background: 'rgba(9,11,22,0.90)',
+        backdropFilter: 'blur(20px)',
+        borderBottom: '1px solid rgba(255,255,255,0.05)',
+      }}
+    >
+      {/* Logo */}
+      <div className="flex items-center gap-2.5">
+        <div className="w-[30px] h-[30px] rounded-[9px] flex items-center justify-center shrink-0"
+          style={{ background: 'linear-gradient(135deg,#f59e0b,#ef4444)', boxShadow: '0 0 16px rgba(245,158,11,0.30)' }}>
+          <TrendingUp className="w-4 h-4 text-black" />
+        </div>
+        <div>
+          <div className="font-space font-bold text-[15px] leading-none">TopMover</div>
+          <div className="text-[9px] leading-none mt-0.5" style={{ color: 'var(--text-dimmer)' }}>Aktien-Scanner</div>
+        </div>
+      </div>
+
+      {/* Search + CTA */}
+      <div className="hidden sm:flex items-center gap-2">
+        <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm"
+          style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+          <Search className="w-3.5 h-3.5 shrink-0" style={{ color: 'var(--text-dim)' }} />
+          <input
+            placeholder="Ticker suchen…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value.toUpperCase())}
+            onKeyDown={(e) => e.key === 'Enter' && goSearch()}
+            className="bg-transparent outline-none w-36 text-sm placeholder:text-white/20"
+          />
+        </div>
+        <button onClick={goSearch}
+          className="px-3.5 py-1.5 rounded-[9px] text-sm font-semibold text-black transition-all"
+          style={{ background: 'linear-gradient(135deg,#f59e0b,#ef4444)', boxShadow: '0 4px 16px rgba(245,158,11,0.25)' }}>
+          Analysieren
+        </button>
+      </div>
+    </header>
+  );
+
+  // ── Stats row ─────────────────────────────────────────────────────────────
+  const statsRow = result && (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      {[
+        {
+          label: 'Kandidaten', value: stocks.length, accent: 'rgba(245,158,11,0.10)',
+          border: 'rgba(245,158,11,0.20)', textColor: '#f59e0b', icon: <BarChart2 className="w-4 h-4" />,
+        },
+        {
+          label: 'Strong Buy', value: stocks.filter((s) => s.signal === 'STRONG_BUY').length,
+          accent: 'rgba(245,158,11,0.08)', border: 'rgba(245,158,11,0.15)', textColor: '#fbbf24',
+          icon: <TrendingUp className="w-4 h-4" />,
+        },
+        {
+          label: 'Buy', value: stocks.filter((s) => s.signal === 'BUY').length,
+          accent: 'rgba(56,189,248,0.08)', border: 'rgba(56,189,248,0.15)', textColor: '#38bdf8',
+          icon: <Zap className="w-4 h-4" />,
+        },
+        {
+          label: 'Watchlist', value: watchlist.size,
+          accent: 'rgba(255,255,255,0.04)', border: 'rgba(255,255,255,0.08)', textColor: 'rgba(255,255,255,0.60)',
+          icon: <Star className="w-4 h-4" />,
+        },
+      ].map(({ label, value, accent, border, textColor, icon }) => (
+        <div key={label} className="rounded-xl px-3.5 py-3"
+          style={{ background: accent, border: `1px solid ${border}` }}>
+          <div className="flex items-center gap-1.5 mb-1" style={{ color: textColor }}>{icon}
+            <span className="text-[10px] uppercase tracking-wider">{label}</span>
+          </div>
+          <div className="font-space font-bold text-2xl" style={{ color: textColor }}>{value}</div>
+        </div>
+      ))}
+    </div>
+  );
+
+  // ── Section divider ───────────────────────────────────────────────────────
+  function SectionDivider({ isStrong, count }: { isStrong: boolean; count: number }) {
+    const color = isStrong ? '#fbbf24' : '#7dd3fc';
+    return (
+      <div className="flex items-center gap-3 mb-4">
+        <span className="text-[9px] font-bold uppercase tracking-[0.10em] shrink-0" style={{ color }}>
+          {isStrong ? '✦ STRONG BUY' : '● BUY / WATCH'}
+        </span>
+        <div className="flex-1 h-px" style={{ background: isStrong ? 'rgba(245,158,11,0.15)' : 'rgba(56,189,248,0.10)' }} />
+        <span className="text-[10px] font-mono shrink-0" style={{ color: 'var(--text-dimmer)' }}>{count}</span>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-[#0d1117]">
-      <Header updatedAt={result?.updatedAt} onRefresh={load} isLoading={loading} />
+    <>
+      {navbar}
 
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-5">
+      <div className="flex" style={{ minHeight: 'calc(100vh - 56px)' }}>
+        {sidebar}
 
-        {/* Title + search */}
-        <div className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-bold text-[#e6edf3]">Top Mover — Heute</h2>
-            <p className="text-sm text-[#7d8590] mt-1 max-w-xl">
-              KI-Screener für 1–14 Tage · Nur auf LS Exchange handelbare Aktien (Trade Republic)
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 bg-[#161b22] border border-[#30363d] rounded-lg px-3 py-2 focus-within:border-[#58a6ff]/60 transition-colors">
-              <Search className="w-4 h-4 text-[#7d8590] shrink-0" />
-              <input
-                type="text"
-                placeholder="Ticker (z.B. ONSEMI)"
-                value={search}
-                onChange={(e) => setSearch(e.target.value.toUpperCase())}
-                onKeyDown={(e) => e.key === 'Enter' && goToSearch()}
-                className="bg-transparent text-sm text-[#e6edf3] placeholder-[#484f58] outline-none w-40"
-              />
+        <main className="flex-1 px-5 py-6 max-w-5xl">
+          {/* Title */}
+          <div className="flex items-center justify-between mb-5">
+            <div>
+              <h1 className="font-space font-bold text-xl tracking-tight flex items-center gap-2">
+                Top Mover
+                <span className="inline-flex items-center gap-1 text-[10px] font-sans font-medium px-2 py-0.5 rounded-full"
+                  style={{ background: 'rgba(74,222,128,0.10)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.20)' }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+                  Live
+                </span>
+              </h1>
+              <p className="text-xs mt-1" style={{ color: 'var(--text-dim)' }}>
+                LS Exchange handelbar · 1–14 Tage Zeithorizont · {result?.updatedAt ? new Date(result.updatedAt).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) : '—'} Uhr
+              </p>
             </div>
-            <button
-              onClick={goToSearch}
-              className="px-3 py-2 bg-[#238636] hover:bg-[#2ea043] text-white text-sm rounded-lg transition-colors font-medium"
-            >
-              Analysieren
-            </button>
-          </div>
-        </div>
-
-        {/* Stats */}
-        {result && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <StatCard label="Kandidaten" value={stocks.length} color="bg-[#bc8cff]/15"
-              icon={<BarChart2 className="w-4 h-4 text-[#bc8cff]" />} />
-            <StatCard label="Strong Buy" value={strongBuy} sub="Score ≥ 65" color="bg-[#3fb950]/15"
-              icon={<TrendingUp className="w-4 h-4 text-[#3fb950]" />} />
-            <StatCard label="Buy" value={buy} sub="Score 40–64" color="bg-[#58a6ff]/15"
-              icon={<Zap className="w-4 h-4 text-[#58a6ff]" />} />
-            <StatCard label="Watchlist" value={watchlist.size} sub="Gemerkte Aktien" color="bg-[#d29922]/15"
-              icon={<Star className="w-4 h-4 text-[#d29922]" />} />
-          </div>
-        )}
-
-        {/* Top pick */}
-        {topMover && !loading && (
-          <div className="bg-gradient-to-r from-[#3fb950]/8 to-transparent border border-[#3fb950]/25 rounded-xl p-4 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-[#3fb950]/15 flex items-center justify-center">
-                <TrendingUp className="w-4 h-4 text-[#3fb950]" />
+            <div className="flex items-center gap-2">
+              {/* Mobile search */}
+              <div className="flex sm:hidden items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)' }}>
+                <Search className="w-3.5 h-3.5" style={{ color: 'var(--text-dim)' }} />
+                <input placeholder="Ticker…" value={search}
+                  onChange={(e) => setSearch(e.target.value.toUpperCase())}
+                  onKeyDown={(e) => e.key === 'Enter' && goSearch()}
+                  className="bg-transparent outline-none w-20 text-sm placeholder:text-white/20" />
               </div>
-              <div>
-                <div className="text-[10px] text-[#3fb950] font-bold uppercase tracking-widest">Top Pick heute</div>
-                <div className="font-bold text-[#e6edf3] text-sm">{topMover.ticker} — {topMover.name}</div>
-                <div className="text-[11px] text-[#7d8590]">
-                  Score {topMover.score.total}/100 ·{' '}
-                  <span className="text-[#3fb950]">+{topMover.change1d.toFixed(1)}%</span> ·{' '}
-                  {topMover.volumeRatio.toFixed(1)}x Volumen · {topMover.sector}
-                </div>
-              </div>
+              <button onClick={load} disabled={loading}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg transition-colors"
+                style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.07)', color: 'var(--text-dim)' }}>
+                <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
             </div>
-            <a href={`/stock/${topMover.ticker}`} className="text-xs text-[#58a6ff] hover:underline">
-              Vollständige Analyse →
-            </a>
           </div>
-        )}
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 bg-[#161b22] border border-[#30363d] rounded-lg p-1 w-fit">
-          <button onClick={() => setTab('screener')}
-            className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors',
-              tab === 'screener' ? 'bg-[#30363d] text-[#e6edf3]' : 'text-[#7d8590] hover:text-[#e6edf3]')}>
-            <BarChart2 className="w-3.5 h-3.5" /> Screener
-          </button>
-          <button onClick={() => setTab('watchlist')}
-            className={clsx('flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors',
-              tab === 'watchlist' ? 'bg-[#30363d] text-[#e6edf3]' : 'text-[#7d8590] hover:text-[#e6edf3]')}>
-            <Bookmark className="w-3.5 h-3.5" /> Watchlist
-            {watchlist.size > 0 && <span className="bg-[#d29922]/20 text-[#d29922] text-[9px] px-1.5 py-0.5 rounded-full font-bold">{watchlist.size}</span>}
-          </button>
-        </div>
-
-        {/* Filters */}
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-1.5 text-xs text-[#7d8590]">
-              <Filter className="w-3.5 h-3.5" /> Signal:
-            </div>
-            {SIGNALS.map((s) => (
-              <button key={s} onClick={() => setSignal(s)}
-                className={clsx('text-xs px-2.5 py-1.5 rounded-md border transition-colors',
-                  signal === s ? 'border-[#58a6ff]/60 bg-[#58a6ff]/15 text-[#58a6ff]'
-                               : 'border-[#30363d] text-[#7d8590] hover:border-[#484f58] hover:text-[#e6edf3]'
-                )}>
-                {SIGNAL_LABELS[s]}
-                {s !== 'Alle' && result && (
-                  <span className="ml-1 opacity-50">({stocks.filter((x) => x.signal === s).length})</span>
-                )}
+          {/* Tabs (mobile) */}
+          <div className="flex md:hidden items-center gap-1 mb-5 p-1 rounded-xl w-fit"
+            style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.06)' }}>
+            {(['screener', 'watchlist'] as const).map((t) => (
+              <button key={t} onClick={() => setTab(t)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                style={{ background: tab === t ? 'rgba(255,255,255,0.08)' : 'transparent', color: tab === t ? '#fff' : 'var(--text-dim)' }}>
+                {t === 'screener' ? <Scan className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
+                {t === 'screener' ? 'Screener' : `Watchlist ${watchlist.size > 0 ? `(${watchlist.size})` : ''}`}
               </button>
             ))}
-            <div className="ml-auto flex items-center gap-1 bg-[#161b22] border border-[#30363d] rounded-lg p-1">
-              <button onClick={() => setView('grid')}
-                className={clsx('p-1.5 rounded transition-colors', view === 'grid' ? 'bg-[#30363d] text-[#e6edf3]' : 'text-[#7d8590] hover:text-[#e6edf3]')}>
-                <LayoutGrid className="w-3.5 h-3.5" />
-              </button>
-              <button onClick={() => setView('table')}
-                className={clsx('p-1.5 rounded transition-colors', view === 'table' ? 'bg-[#30363d] text-[#e6edf3]' : 'text-[#7d8590] hover:text-[#e6edf3]')}>
-                <List className="w-3.5 h-3.5" />
-              </button>
-            </div>
           </div>
-          {tab === 'screener' && stocks.length > 0 && (
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-[#7d8590]">Sektor:</span>
-              {sectors.map((s) => (
-                <button key={s} onClick={() => setSectorFilter(s)}
-                  className={clsx('text-xs px-2.5 py-1 rounded-full border transition-all',
-                    sectorFilter === s ? 'border-[#58a6ff]/60 bg-[#58a6ff]/15 text-[#58a6ff]'
-                                       : 'border-[#30363d] text-[#7d8590] hover:border-[#484f58] hover:text-[#e6edf3]'
-                  )}>
-                  {s} <span className="opacity-50">({sectorCounts[s] ?? 0})</span>
-                </button>
+
+          {statsRow}
+
+          {/* Loading skeleton */}
+          {loading && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="rounded-[14px] h-52 animate-pulse" style={{ background: 'var(--surface)' }} />
               ))}
             </div>
           )}
-        </div>
 
-        {/* Loading */}
-        {loading && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="bg-[#161b22] border border-[#30363d] rounded-xl h-64 animate-pulse" />
-            ))}
-          </div>
-        )}
-
-        {/* Error */}
-        {error && (
-          <div className="flex items-center gap-3 bg-[#f85149]/8 border border-[#f85149]/30 rounded-xl p-4 text-sm text-[#f85149]">
-            <AlertCircle className="w-5 h-5 shrink-0" />
-            <div>
-              <strong>Fehler:</strong> {error}
-              <button onClick={load} className="ml-3 underline">Nochmal</button>
+          {/* Watchlist empty */}
+          {!loading && tab === 'watchlist' && watchlist.size === 0 && (
+            <div className="flex flex-col items-center py-20 gap-3" style={{ color: 'var(--text-dim)' }}>
+              <Star className="w-12 h-12 opacity-20" />
+              <p className="font-medium text-white/60">Watchlist ist leer</p>
+              <p className="text-sm">Klicke ★ auf einer Aktie zum Merken</p>
+              <button onClick={() => setTab('screener')} className="text-sm" style={{ color: '#38bdf8' }}>Zum Screener</button>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Watchlist empty */}
-        {!loading && tab === 'watchlist' && watchlist.size === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-[#7d8590]">
-            <Star className="w-12 h-12 mb-3 opacity-20" />
-            <p className="font-medium text-[#e6edf3]">Watchlist ist leer</p>
-            <p className="text-sm mt-1">Klicke auf das ★-Symbol auf einer Aktie, um sie zu merken</p>
-            <button onClick={() => setTab('screener')} className="mt-3 text-sm text-[#58a6ff] hover:underline">
-              Zum Screener
-            </button>
-          </div>
-        )}
-
-        {/* Empty filter */}
-        {!loading && !error && filtered.length === 0 && (tab === 'screener' ? stocks.length > 0 : watchlist.size > 0) && (
-          <div className="flex flex-col items-center justify-center py-12 text-[#7d8590]">
-            <Filter className="w-10 h-10 mb-3 opacity-30" />
-            <p className="font-medium">Keine Aktien für diesen Filter</p>
-            <button onClick={() => { setSignal('Alle'); setSectorFilter('Alle'); }}
-              className="mt-2 text-sm text-[#58a6ff] hover:underline">Filter zurücksetzen</button>
-          </div>
-        )}
-
-        {/* No results at all */}
-        {!loading && !error && tab === 'screener' && stocks.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-16 text-[#7d8590]">
-            <RefreshCw className="w-12 h-12 mb-3 opacity-30" />
-            <p className="font-medium">Keine Ergebnisse — Markt lädt</p>
-            <button onClick={load} className="mt-3 px-4 py-2 bg-[#238636] text-white text-sm rounded-lg hover:bg-[#2ea043]">
-              Nochmal laden
-            </button>
-          </div>
-        )}
-
-        {/* Results */}
-        {!loading && filtered.length > 0 && (
-          <>
-            <div className="text-xs text-[#7d8590]">
-              {filtered.length} Aktie{filtered.length !== 1 ? 'n' : ''} {tab === 'watchlist' ? 'auf deiner Watchlist' : 'gefunden'}
-            </div>
-            {view === 'grid' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {filtered.map((stock, i) => (
-                  <StockCard
-                    key={stock.ticker}
-                    stock={stock}
-                    rank={i + 1}
-                    isWatched={watchlist.has(stock.ticker)}
-                    onToggleWatch={toggleWatch}
-                  />
+          {/* Strong Buy section */}
+          {!loading && strongBuys.length > 0 && (
+            <div className="mb-7">
+              <SectionDivider isStrong count={strongBuys.length} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {strongBuys.map((s, i) => (
+                  <FeaturedCard key={s.ticker} stock={s} rank={i + 1}
+                    isWatched={watchlist.has(s.ticker)} onToggleWatch={toggleWatch}
+                    onSelect={setSelected} />
                 ))}
               </div>
-            ) : (
-              <StockTable stocks={filtered} watchlist={watchlist} onToggleWatch={toggleWatch} />
-            )}
-          </>
-        )}
+            </div>
+          )}
 
-        <p className="text-[10px] text-[#484f58] text-center pb-4">
-          Keine Anlageberatung. Kurse können verzögert sein. Daten: Yahoo Finance · KI: Groq/Llama
-        </p>
-      </main>
-      <ApiUsage />
-    </div>
+          {/* Buy / Watch section */}
+          {!loading && others.length > 0 && (
+            <div>
+              <SectionDivider isStrong={false} count={others.length} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {others.map((s, i) => (
+                  <StockCard key={s.ticker} stock={s} rank={strongBuys.length + i + 1}
+                    isWatched={watchlist.has(s.ticker)} onToggleWatch={toggleWatch}
+                    onSelect={setSelected} />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!loading && filtered.length === 0 && (tab === 'screener' ? stocks.length > 0 : watchlist.size > 0) && (
+            <div className="flex flex-col items-center py-16 gap-2" style={{ color: 'var(--text-dim)' }}>
+              <p>Keine Aktien für diesen Filter</p>
+              <button onClick={() => { setSignal('Alle'); setSector(ALL_SECTORS); }}
+                className="text-sm" style={{ color: '#38bdf8' }}>Filter zurücksetzen</button>
+            </div>
+          )}
+
+          <p className="text-[10px] text-center mt-8 pb-20 md:pb-4" style={{ color: 'var(--text-dimmer)' }}>
+            Keine Anlageberatung · Kurse können verzögert sein · Yahoo Finance · Finnhub · Groq/Llama
+          </p>
+        </main>
+      </div>
+
+      {/* Mobile bottom nav */}
+      <nav className="fixed bottom-0 left-0 right-0 z-30 flex md:hidden"
+        style={{ background: 'rgba(9,11,22,0.95)', backdropFilter: 'blur(20px)', borderTop: '1px solid rgba(255,255,255,0.06)', height: 56 }}>
+        {[
+          { id: 'screener', label: 'Scanner', icon: <Scan className="w-5 h-5" /> },
+          { id: 'watchlist', label: 'Watchlist', icon: <Bookmark className="w-5 h-5" /> },
+        ].map(({ id, label, icon }) => (
+          <button key={id} onClick={() => setTab(id as 'screener' | 'watchlist')}
+            className="flex-1 flex flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors"
+            style={{ color: tab === id ? '#f59e0b' : 'var(--text-dim)' }}>
+            {icon}
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {/* Detail drawer */}
+      <DetailDrawer stock={selected} onClose={() => setSelected(null)} />
+    </>
   );
 }

@@ -1,125 +1,192 @@
 'use client';
 
-import Link from 'next/link';
-import { TrendingUp, TrendingDown, Star, Zap } from 'lucide-react';
+import { Star, TrendingUp, TrendingDown } from 'lucide-react';
 import type { ScreenedStock } from '@/lib/types';
-import { clsx } from 'clsx';
+import { ScoreArc } from './ScoreArc';
 
-const SIGNAL_STYLES: Record<string, { badge: string; bar: string }> = {
-  STRONG_BUY: { badge: 'bg-[#3fb950]/15 text-[#3fb950] border-[#3fb950]/40', bar: 'border-l-[#3fb950]' },
-  BUY:        { badge: 'bg-[#58a6ff]/15 text-[#58a6ff] border-[#58a6ff]/40', bar: 'border-l-[#58a6ff]' },
-  WATCH:      { badge: 'bg-[#d29922]/15 text-[#d29922] border-[#d29922]/40', bar: 'border-l-[#d29922]' },
-  NEUTRAL:    { badge: 'bg-[#484f58]/15 text-[#7d8590] border-[#484f58]/40', bar: 'border-l-[#30363d]' },
-};
-
-const SIGNAL_LABELS: Record<string, string> = {
-  STRONG_BUY: 'STRONG BUY', BUY: 'BUY', WATCH: 'WATCH', NEUTRAL: 'NEUTRAL',
-};
-
-function fmt(n: number): string {
-  if (n >= 1e12) return `$${(n / 1e12).toFixed(1)}T`;
-  if (n >= 1e9)  return `$${(n / 1e9).toFixed(1)}B`;
-  if (n >= 1e6)  return `$${(n / 1e6).toFixed(0)}M`;
-  return `$${n.toLocaleString()}`;
-}
-
-function ScoreBar({ label, value, max, color }: { label: string; value: number; max: number; color: string }) {
-  const pct = Math.min(100, Math.round((value / max) * 100));
+function MiniBar({ label, val, max, color }: { label: string; val: number; max: number; color: string }) {
   return (
     <div className="flex items-center gap-2 text-[10px]">
-      <span className="w-16 shrink-0 text-[#484f58]">{label}</span>
-      <div className="flex-1 h-1.5 bg-[#21262d] rounded-full overflow-hidden">
-        <div className={`h-full rounded-full ${color}`} style={{ width: `${pct}%` }} />
+      <span className="w-6 shrink-0" style={{ color: 'var(--text-dimmer)' }}>{label}</span>
+      <div className="flex-1 h-1 rounded-full" style={{ background: 'rgba(255,255,255,0.06)' }}>
+        <div className="h-full rounded-full" style={{ width: `${(val / max) * 100}%`, background: color }} />
       </div>
-      <span className="w-5 text-right text-[#7d8590]">{value}</span>
     </div>
   );
 }
 
-export function StockCard({ stock, rank, isWatched = false, onToggleWatch }: {
+function Pill({ children, color, bg }: { children: React.ReactNode; color: string; bg: string }) {
+  return (
+    <span className="text-[10px] font-medium px-2 py-0.5 rounded-[6px]" style={{ color, background: bg }}>
+      {children}
+    </span>
+  );
+}
+
+// ── Featured card (Strong Buy) ─────────────────────────────────────────────
+export function FeaturedCard({ stock, rank, isWatched, onToggleWatch, onSelect }: {
   stock: ScreenedStock;
   rank: number;
   isWatched?: boolean;
-  onToggleWatch?: (ticker: string) => void;
+  onToggleWatch?: (t: string) => void;
+  onSelect: (s: ScreenedStock) => void;
 }) {
   const isPos = stock.change1d >= 0;
-  const styles = SIGNAL_STYLES[stock.signal];
 
   return (
-    <div className={clsx(
-      'group relative bg-[#161b22] border border-[#30363d] border-l-[3px] rounded-xl overflow-hidden',
-      'hover:bg-[#1c2128] hover:shadow-lg hover:shadow-black/20 transition-all duration-200',
-      styles.bar,
-    )}>
-      <div className="absolute top-3 left-4 text-[10px] font-bold text-[#484f58]">#{rank}</div>
+    <div
+      className="relative rounded-[18px] p-5 cursor-pointer transition-all duration-200 overflow-hidden animate-fade-up"
+      style={{
+        background: 'linear-gradient(135deg, rgba(245,158,11,0.08), rgba(239,68,68,0.05), rgba(9,11,22,0.95))',
+        border: '1px solid rgba(245,158,11,0.30)',
+      }}
+      onClick={() => onSelect(stock)}
+    >
+      {/* Glow blob */}
+      <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full pointer-events-none"
+        style={{ background: 'rgba(245,158,11,0.12)', filter: 'blur(40px)' }} />
 
-      {onToggleWatch && (
-        <button
-          onClick={(e) => { e.preventDefault(); e.stopPropagation(); onToggleWatch(stock.ticker); }}
-          className="absolute top-2.5 right-2.5 z-10 p-1.5 rounded-lg hover:bg-[#30363d] transition-colors"
-        >
-          <Star className={clsx('w-3.5 h-3.5 transition-colors', isWatched ? 'fill-[#d29922] text-[#d29922]' : 'text-[#484f58] group-hover:text-[#7d8590]')} />
-        </button>
+      {/* Top row */}
+      <div className="flex items-start justify-between mb-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <span
+              className="text-[10px] font-bold px-2.5 py-1 rounded-full"
+              style={{ background: 'linear-gradient(135deg, rgba(245,158,11,0.20), rgba(239,68,68,0.15))', color: '#fbbf24', border: '1px solid rgba(245,158,11,0.30)' }}
+            >
+              ✦ STRONG BUY
+            </span>
+            <span className="text-[10px] font-mono" style={{ color: 'var(--text-dimmer)' }}>#{rank}</span>
+          </div>
+          <div className="font-space font-bold text-[28px] tracking-tight leading-none">{stock.ticker}</div>
+          <div className="text-xs mt-1 max-w-[200px]" style={{ color: 'var(--text-dim)' }}>{stock.name}</div>
+        </div>
+
+        <div className="flex flex-col items-end gap-2">
+          {onToggleWatch && (
+            <button onClick={(e) => { e.stopPropagation(); onToggleWatch(stock.ticker); }}
+              className="p-1.5 rounded-lg hover:bg-white/5 transition-colors">
+              <Star className="w-3.5 h-3.5" style={{ fill: isWatched ? '#f59e0b' : 'transparent', color: isWatched ? '#f59e0b' : 'rgba(255,255,255,0.25)' }} />
+            </button>
+          )}
+          <ScoreArc score={stock.score.total} size={52} isStrong />
+        </div>
+      </div>
+
+      {/* Price */}
+      <div className="flex items-baseline gap-3 mb-4">
+        <span className="font-space font-bold text-2xl">${stock.price.toFixed(2)}</span>
+        <span className={`flex items-center gap-1 text-sm font-semibold ${isPos ? 'text-gain' : 'text-loss'}`}>
+          {isPos ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+          {isPos ? '+' : ''}{stock.change1d.toFixed(2)}%
+        </span>
+      </div>
+
+      {/* Score bars */}
+      <div className="space-y-1.5 mb-4">
+        <MiniBar label="M" val={stock.score.momentum} max={30} color="#4ade80" />
+        <MiniBar label="V" val={stock.score.volume} max={25} color="#fbbf24" />
+        <MiniBar label="S" val={stock.score.sector} max={20} color="#ef4444" />
+      </div>
+
+      {/* Pills */}
+      <div className="flex flex-wrap gap-1.5 mb-3">
+        <Pill color="#fbbf24" bg="rgba(251,191,36,0.10)">{stock.volumeRatio.toFixed(1)}x Vol</Pill>
+        <Pill color="rgba(255,255,255,0.40)" bg="rgba(255,255,255,0.05)">{stock.sector}</Pill>
+        <Pill color="rgba(255,255,255,0.40)" bg="rgba(255,255,255,0.05)">{stock.change5d >= 0 ? '+' : ''}{stock.change5d.toFixed(1)}% 5T</Pill>
+      </div>
+
+      {/* Summary */}
+      {stock.briefSummary && (
+        <p className="text-xs leading-relaxed" style={{ color: 'var(--text-dim)' }}>
+          {stock.briefSummary}
+        </p>
       )}
+    </div>
+  );
+}
 
-      <Link href={`/stock/${stock.ticker}`} className="block p-4">
-        {/* Header */}
-        <div className="flex items-start justify-between mt-3 mb-3">
-          <div className="min-w-0 flex-1 pr-8">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-[17px] text-[#e6edf3] leading-none">{stock.ticker}</span>
-              <span className={clsx('text-[9px] font-bold px-1.5 py-0.5 rounded border', styles.badge)}>
-                {SIGNAL_LABELS[stock.signal]}
-              </span>
-            </div>
-            <p className="text-[11px] text-[#7d8590] mt-1 truncate">{stock.name}</p>
+// ── Regular card (Buy / Watch) ─────────────────────────────────────────────
+export function StockCard({ stock, rank, isWatched, onToggleWatch, onSelect }: {
+  stock: ScreenedStock;
+  rank: number;
+  isWatched?: boolean;
+  onToggleWatch?: (t: string) => void;
+  onSelect: (s: ScreenedStock) => void;
+}) {
+  const isPos = stock.change1d >= 0;
+  const isBuy = stock.signal === 'BUY';
+  const accentColor = isBuy ? '#38bdf8' : 'rgba(255,255,255,0.30)';
+
+  return (
+    <div
+      className="relative rounded-[14px] p-4 cursor-pointer transition-all duration-[180ms] overflow-hidden animate-fade-up"
+      style={{
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+      }}
+      onMouseEnter={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--surface-hover)'; (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border-hover)'; }}
+      onMouseLeave={(e) => { (e.currentTarget as HTMLDivElement).style.background = 'var(--surface)'; (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; }}
+      onClick={() => onSelect(stock)}
+    >
+      {/* Top row */}
+      <div className="flex items-start justify-between mb-3">
+        <div className="min-w-0 flex-1 pr-2">
+          <div className="flex items-center gap-2 mb-1">
+            <span
+              className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+              style={{
+                background: isBuy ? 'rgba(56,189,248,0.12)' : 'rgba(255,255,255,0.05)',
+                color: isBuy ? '#7dd3fc' : 'rgba(255,255,255,0.35)',
+                border: isBuy ? '1px solid rgba(56,189,248,0.22)' : '1px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              {stock.signal.replace('_', ' ')}
+            </span>
           </div>
-          <div className="text-right shrink-0">
-            <div className="font-bold text-[#e6edf3] text-[15px]">${stock.price.toFixed(2)}</div>
-            <div className={clsx('text-xs font-semibold flex items-center gap-0.5 justify-end mt-0.5', isPos ? 'text-[#3fb950]' : 'text-[#f85149]')}>
-              {isPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-              {isPos ? '+' : ''}{stock.change1d.toFixed(2)}%
-            </div>
-          </div>
+          <div className="font-space font-bold text-[15px] tracking-tight leading-none">{stock.ticker}</div>
+          <div className="text-[10px] mt-0.5 truncate" style={{ color: 'var(--text-dimmer)' }}>{stock.name}</div>
         </div>
 
-        {/* Score total + 5d */}
-        <div className="flex items-center justify-between mb-3 text-xs">
-          <div className="flex items-center gap-1.5">
-            <div className="w-8 h-8 rounded-lg bg-[#0d1117] border border-[#30363d] flex items-center justify-center font-bold text-sm text-[#e6edf3]">
-              {stock.score.total}
-            </div>
-            <div>
-              <div className="text-[10px] text-[#484f58]">Score /100</div>
-              <div className="text-[10px] text-[#58a6ff]">{stock.volumeRatio.toFixed(1)}x Vol</div>
-            </div>
-          </div>
-          <div className="text-right">
-            <div className={clsx('text-sm font-semibold', stock.change5d >= 0 ? 'text-[#3fb950]' : 'text-[#f85149]')}>
-              {stock.change5d >= 0 ? '+' : ''}{stock.change5d.toFixed(1)}%
-            </div>
-            <div className="text-[10px] text-[#484f58]">5 Tage</div>
-          </div>
-        </div>
-
-        {/* Score bars */}
-        <div className="space-y-1.5 mb-3">
-          <ScoreBar label="Momentum" value={stock.score.momentum} max={30} color="bg-[#3fb950]" />
-          <ScoreBar label="Volumen" value={stock.score.volume} max={25} color="bg-[#58a6ff]" />
-          <ScoreBar label="Sektorstärke" value={stock.score.sector} max={20} color="bg-[#bc8cff]" />
-        </div>
-
-        {/* Footer */}
-        <div className="flex items-center gap-1.5 pt-2 border-t border-[#21262d]">
-          <Zap className="w-3 h-3 text-[#d29922] shrink-0" />
-          <span className="text-[10px] text-[#7d8590] truncate flex-1">{stock.catalystType}</span>
-          <span className="text-[10px] text-[#484f58] shrink-0">{fmt(stock.marketCap)}</span>
-        </div>
-
-        {stock.briefSummary && (
-          <p className="mt-2 text-[11px] text-[#8b949e] leading-relaxed line-clamp-2">{stock.briefSummary}</p>
+        {onToggleWatch && (
+          <button onClick={(e) => { e.stopPropagation(); onToggleWatch(stock.ticker); }}
+            className="p-1.5 rounded-lg hover:bg-white/5 transition-colors shrink-0">
+            <Star className="w-3 h-3" style={{ fill: isWatched ? '#f59e0b' : 'transparent', color: isWatched ? '#f59e0b' : 'rgba(255,255,255,0.20)' }} />
+          </button>
         )}
-      </Link>
+      </div>
+
+      {/* Price + Arc */}
+      <div className="flex items-center gap-3 mb-3">
+        <div className="flex-1">
+          <div className="font-space font-bold text-lg">${stock.price.toFixed(2)}</div>
+          <div className={`flex items-center gap-0.5 text-xs font-semibold mt-0.5 ${isPos ? 'text-gain' : 'text-loss'}`}>
+            {isPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {isPos ? '+' : ''}{stock.change1d.toFixed(2)}%
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <ScoreArc score={stock.score.total} size={38} isStrong={false} />
+          <div className="space-y-0.5">
+            <MiniBar label="M" val={stock.score.momentum} max={30} color="#4ade80" />
+            <MiniBar label="V" val={stock.score.volume} max={25} color="#fbbf24" />
+            <MiniBar label="S" val={stock.score.sector} max={20} color={accentColor} />
+          </div>
+        </div>
+      </div>
+
+      {/* Pills */}
+      <div className="flex flex-wrap gap-1">
+        <Pill color="#fbbf24" bg="rgba(251,191,36,0.08)">{stock.volumeRatio.toFixed(1)}x</Pill>
+        <Pill color="rgba(255,255,255,0.30)" bg="rgba(255,255,255,0.04)">{stock.change5d >= 0 ? '+' : ''}{stock.change5d.toFixed(1)}% 5T</Pill>
+        <Pill color="rgba(255,255,255,0.30)" bg="rgba(255,255,255,0.04)">{stock.sector}</Pill>
+      </div>
+
+      {stock.briefSummary && (
+        <p className="mt-2 text-[10px] leading-relaxed line-clamp-2" style={{ color: 'var(--text-dimmer)' }}>
+          {stock.briefSummary}
+        </p>
+      )}
     </div>
   );
 }

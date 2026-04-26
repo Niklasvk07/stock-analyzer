@@ -8,27 +8,30 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        space: ['var(--font-space)', 'sans-serif'],
+        sans: ['var(--font-dm)', 'DM Sans', 'sans-serif'],
+        mono: ['var(--font-mono)', 'JetBrains Mono', 'monospace'],
+      },
       colors: {
-        surface: {
-          DEFAULT: '#0d1117',
-          card: '#161b22',
-          hover: '#1c2128',
-          border: '#30363d',
-        },
-        accent: {
-          green: '#3fb950',
-          red: '#f85149',
-          blue: '#58a6ff',
-          yellow: '#d29922',
-          purple: '#bc8cff',
-        },
+        bg: '#090b16',
+        surface: '#111422',
+        'surface-hover': '#161929',
+        amber: '#f59e0b',
+        sky: '#38bdf8',
+        gain: '#4ade80',
+        loss: '#f87171',
       },
       animation: {
-        'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-        'fade-in': 'fadeIn 0.3s ease-in-out',
+        'drawer-in': 'drawerIn 0.22s cubic-bezier(0.22,1,0.36,1)',
+        'fade-up': 'fadeUp 0.3s ease-out',
       },
       keyframes: {
-        fadeIn: {
+        drawerIn: {
+          '0%': { transform: 'translateX(50px)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
+        },
+        fadeUp: {
           '0%': { opacity: '0', transform: 'translateY(8px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
