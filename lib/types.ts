@@ -3,7 +3,7 @@ export interface StockScore {
   volume: number;      // 0-25
   sector: number;      // 0-20
   fundamental: number; // 0-15
-  news: number;        // 0-10
+  probability: number; // 0-20 (Steigewahrscheinlichkeit)
   total: number;       // 0-100
 }
 

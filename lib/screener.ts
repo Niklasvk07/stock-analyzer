@@ -23,38 +23,49 @@ const SECTOR_SCORES: Record<string, number> = {
   'Communication Services': 14, 'Basic Materials': 11,
 };
 
+// Steigewahrscheinlichkeit: how likely is further upward movement?
+function calcProbability(s: {
+  change1d: number; change5d: number; change20d: number;
+  volumeRatio: number; price?: number; weekHigh52?: number;
+}): number {
+  let p = 0;
+
+  // Multi-timeframe alignment (strongest signal)
+  if (s.change1d > 0 && s.change5d > 0 && s.change20d > 0) p += 8;
+  else if (s.change5d > 0 && s.change20d > 0) p += 4;
+  else if (s.change1d > 0 && s.change5d > 0) p += 4;
+  else if (s.change1d > 0) p += 2;
+
+  // Volume surge on up day (institutional confirmation)
+  if (s.change1d > 1 && s.volumeRatio >= 3) p += 6;
+  else if (s.change1d > 0 && s.volumeRatio >= 2) p += 4;
+  else if (s.change1d > 0 && s.volumeRatio >= 1.5) p += 2;
+
+  // Not over-extended (1-12% sweet spot = still has room)
+  if (s.change1d >= 1 && s.change1d < 12) p += 4;
+  else if (s.change1d >= 12 && s.change1d < 20) p += 2;
+  // >20%: likely to pull back, no points
+
+  // 52w positioning: recovering but not at ceiling
+  if (s.weekHigh52 && s.price) {
+    const pctBelow = ((s.weekHigh52 - s.price) / s.weekHigh52) * 100;
+    if (pctBelow >= 5 && pctBelow <= 30) p += 2;
+  }
+
+  return Math.min(20, Math.round(p));
+}
+
 function score(s: {
   change1d: number; change5d: number; change20d: number;
   volumeRatio: number; sector: string; marketCap: number;
   pe?: number; weekHigh52?: number; price?: number;
 }): StockScore {
-  // MOMENTUM — forward-looking: rewards consistency, penalizes single-day spikes
   let momentum = 0;
+  momentum += Math.min(13, Math.max(0, s.change1d * 0.9));
+  momentum += Math.min(13, Math.max(0, s.change5d * 0.45));
+  momentum += s.change20d > 0 ? Math.min(4, s.change20d * 0.1) : 0;
+  momentum = Math.min(30, Math.round(momentum));
 
-  // 1-day: capped at 10% to avoid rewarding unsustainable spikes
-  const c1 = Math.min(10, Math.max(0, s.change1d));
-  momentum += c1 * 0.8;
-
-  // 5-day: more weight — sustained trend is a better predictor of continuation
-  const c5 = Math.min(25, Math.max(0, s.change5d));
-  momentum += c5 * 0.7;
-
-  // 20-day trend confirmation
-  momentum += s.change20d > 0 ? Math.min(4, s.change20d * 0.12) : 0;
-
-  // Consistency bonus: all three timeframes positive = more likely to continue
-  if (s.change1d > 0 && s.change5d > 0 && s.change20d > 0) momentum += 4;
-
-  // Spike penalty: stock already jumped >12% today → likely to consolidate/reverse
-  if (s.change1d > 12) momentum -= 6;
-
-  // Momentum without 5d trend is weak: if stock pumped today but was flat/negative over 5d,
-  // it's a single-day event, not a trend
-  if (s.change1d > 3 && s.change5d <= 0) momentum -= 4;
-
-  momentum = Math.min(30, Math.max(0, Math.round(momentum)));
-
-  // VOLUME — high volume on upward moves = institutional interest
   let volume = 0;
   if (s.volumeRatio >= 5) volume = 25;
   else if (s.volumeRatio >= 3) volume = 20;
@@ -62,39 +73,30 @@ function score(s: {
   else if (s.volumeRatio >= 1.5) volume = 9;
   else if (s.volumeRatio >= 1.2) volume = 5;
   else volume = 2;
-  // Volume spike without price move = distribution (selling), penalize
-  if (s.volumeRatio >= 3 && s.change1d < 1) volume = Math.max(0, volume - 8);
 
   const sector = Math.min(20, SECTOR_SCORES[s.sector] ?? 10);
 
-  // FUNDAMENTAL — technical breakout potential
-  let fundamental = 3;
+  let fundamental = 4;
   if (s.marketCap > 0) {
-    if (s.marketCap < 500e6) fundamental += 5;
+    if (s.marketCap < 500e6) fundamental += 6;
     else if (s.marketCap < 2e9) fundamental += 4;
     else if (s.marketCap < 15e9) fundamental += 2;
     else fundamental += 1;
   }
-  if (s.pe && s.pe > 0 && s.pe < 50) fundamental += 2;
+  if (s.pe && s.pe > 0 && s.pe < 50) fundamental += 3;
+  if (s.weekHigh52 && s.price && s.price >= s.weekHigh52 * 0.92) fundamental += 2;
+  fundamental = Math.min(15, fundamental);
 
-  // 52W high breakout: price at/above 52W high = price discovery, strong signal for continuation
-  if (s.weekHigh52 && s.price) {
-    const pctFromHigh = (s.weekHigh52 - s.price) / s.weekHigh52;
-    if (pctFromHigh <= 0.02) fundamental += 5;       // breaking out above 52W high
-    else if (pctFromHigh <= 0.08) fundamental += 3;  // approaching breakout
-    else if (pctFromHigh >= 0.40) fundamental -= 2;  // deep below 52W high, weak
-  }
-  fundamental = Math.min(15, Math.max(0, fundamental));
+  const probability = calcProbability(s);
 
-  const total = Math.min(100, Math.max(0, Math.round(momentum + volume + sector + fundamental)));
-  return { momentum, volume, sector, fundamental, news: 0, total };
+  const total = Math.min(100, Math.round(momentum + volume + sector + fundamental + probability));
+  return { momentum, volume, sector, fundamental, probability, total };
 }
 
 function signal(total: number): ScreenedStock['signal'] {
-  // Raised thresholds: STRONG BUY now requires multiple aligned indicators
-  if (total >= 75) return 'STRONG_BUY';
-  if (total >= 57) return 'BUY';
-  if (total >= 38) return 'WATCH';
+  if (total >= 70) return 'STRONG_BUY'; // higher threshold = requires good probability
+  if (total >= 52) return 'BUY';
+  if (total >= 36) return 'WATCH';
   return 'NEUTRAL';
 }
 
@@ -110,13 +112,11 @@ function catalyst(c1d: number, c5d: number, vol: number, sector: string): string
 }
 
 export async function runScreener(): Promise<ScreenedStock[]> {
-  // Fetch universe + screener in parallel
   const [universeQuotes, screenerQuotes] = await Promise.all([
     batchQuote(UNIVERSE),
     getScreenerQuotes('day_gainers', 30),
   ]);
 
-  // Deduplicate
   const seen = new Set<string>();
   const allQuotes = [...universeQuotes, ...screenerQuotes].filter((q) => {
     if (!q.symbol || seen.has(q.symbol)) return false;
@@ -124,7 +124,7 @@ export async function runScreener(): Promise<ScreenedStock[]> {
     return true;
   });
 
-  // Build initial stock list — only LS Exchange compatible (marketCap > 50M, price > $1)
+  // LS Exchange compatible: price > $1, marketCap > 50M
   const stocks: ScreenedStock[] = allQuotes
     .filter((q) => (q.regularMarketPrice ?? 0) > 1 && (q.marketCap ?? 0) > 50e6)
     .map((q) => {
@@ -146,13 +146,13 @@ export async function runScreener(): Promise<ScreenedStock[]> {
         pe: q.trailingPE,
         weekHigh52: q.fiftyTwoWeekHigh,
         weekLow52: q.fiftyTwoWeekLow,
-        score: { momentum: 0, volume: 0, sector: 0, fundamental: 0, news: 0, total: 0 },
+        score: { momentum: 0, volume: 0, sector: 0, fundamental: 0, probability: 0, total: 0 },
         signal: 'NEUTRAL' as const,
         catalystType: '',
       };
     });
 
-  // Enrich top candidates with history (limit to save time)
+  // Enrich top candidates with history
   const sorted = stocks.sort((a, b) => Math.abs(b.change1d) - Math.abs(a.change1d));
   const toEnrich = sorted.slice(0, 40);
 
@@ -169,7 +169,6 @@ export async function runScreener(): Promise<ScreenedStock[]> {
     })
   );
 
-  // Score all stocks
   for (const s of stocks) {
     s.score = score({
       change1d: s.change1d, change5d: s.change5d, change20d: s.change20d,
@@ -184,5 +183,5 @@ export async function runScreener(): Promise<ScreenedStock[]> {
   return stocks
     .filter((s) => s.score.total >= 20)
     .sort((a, b) => b.score.total - a.score.total)
-    .slice(0, 16);
+    .slice(0, 16); // max 16 stocks as requested
 }

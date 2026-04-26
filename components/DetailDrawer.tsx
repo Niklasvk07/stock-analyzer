@@ -132,6 +132,7 @@ export function DetailDrawer({ stock, onClose }: Props) {
               { label: 'Momentum', val: stock.score.momentum, max: 30, color: '#4ade80' },
               { label: 'Volumen', val: stock.score.volume, max: 25, color: '#fbbf24' },
               { label: 'Sektor', val: stock.score.sector, max: 20, color: accentColor },
+              { label: 'Prognose', val: stock.score.probability ?? 0, max: 20, color: isStrong ? '#f59e0b' : '#7dd3fc' },
             ].map(({ label, val, max, color }) => (
               <div key={label} className="flex items-center gap-3 text-xs">
                 <span className="w-16 shrink-0" style={{ color: 'var(--text-dim)' }}>{label}</span>
